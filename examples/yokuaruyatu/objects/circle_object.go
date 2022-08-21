@@ -3,7 +3,9 @@ package objects
 import (
 	b2d "github.com/E4/box2d"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+	"image/color"
 	"math"
 )
 
@@ -69,6 +71,15 @@ func (r *CircleObject) Draw(screen *ebiten.Image) {
 		vs[i].ColorB = r.b / float32(0xff)
 	}
 	screen.DrawTriangles(vs, is, emptySubImage, op)
+	// 醜いので追加で線を描画する
+
+	rotateVecDst := RotateVec(
+		*b2d.NewB2Vec2(0, -r.Shape.GetRadius()),
+		radian,
+	)
+	ebitenutil.DrawLine(screen,
+		float64(vec.X*SCALE), float64(vec.Y*SCALE),
+		float64(vec.X*SCALE)+float64(rotateVecDst.X*SCALE), float64(vec.Y*SCALE)+float64(rotateVecDst.Y*SCALE), color.Black)
 }
 
 func (r *CircleObject) SetRGB(_r, g, b float32) {
