@@ -2,12 +2,13 @@ package main
 
 import (
 	"box2d/examples/yokuaruyatu/objects"
+	"fmt"
 	b2d "github.com/E4/box2d"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"image/color"
 	"log"
-	"math"
 )
 
 /**
@@ -46,8 +47,13 @@ func (b *Block) GetRectPath() (Point, Point, Point, Point) {
 
 var World b2d.B2World
 
+type CustomJoint interface {
+	GetAnchorA() b2d.B2Vec2
+	GetAnchorB() b2d.B2Vec2
+}
+
+var joints []CustomJoint
 var boxes []objects.PolygonObject
-var circle objects.CircleObject
 
 func addBox(box objects.PolygonObject) {
 	boxes = append(boxes, box)
@@ -78,21 +84,21 @@ func init() {
 	// step.2
 	World = b2d.MakeB2World(*gravity)
 
-	// 床
-	addBox(objects.NewPolygonBox(1.5, 2, 1, 0.1, &World, 0))
-	// 斜めの床
-	addBox(objects.NewPolygonBox(4, 4, 2, 0.1, &World, 0.25*math.Pi))
-
-	offsetX := 0.4
-	// ゴールの床
-	addBox(objects.NewPolygonBox(8-0.4-offsetX, 9-0.4, 0.1, 0.4, &World, 0)) // 左辺
-	addBox(objects.NewPolygonBox(8-offsetX, 9, 0.4, 0.1, &World, 0))         // 床
-	addBox(objects.NewPolygonBox(8+0.4-offsetX, 9-0.4, 0.1, 0.4, &World, 0)) // 右辺
-
-	// エディタ作らないと話になりませんね ww
-
-	// 円
-	circle = objects.NewDynamicCircleObject(1, 1, 0.2, &World)
+	// Jointの勉強をする
+	// DynamicBodyのほうは普通に作ればいいっぽい
+	bodyA := objects.NewDynamicBox(4, 1, 0.4, 0.1, 1.0, &World)
+	bodyA.Body.SetAngularDamping(0.1)
+	bodyB := objects.NewPolygonBox(5, 3, 0.4, 0.1, &World, 0)
+	addBox(bodyA)
+	addBox(bodyB)
+	// Distance Joint
+	jointDef := b2d.MakeB2DistanceJointDef()
+	// アンカーポイントは世界の座標を指定することに注意
+	jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
+	jointDef.CollideConnected = true
+	World.CreateJoint(&jointDef)
+	// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー
+	joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
 
 	emptyImage.Fill(color.White)
 
@@ -113,15 +119,6 @@ var (
 
 func (g *Game) Update() error {
 	// 試しにたぶんこうだろうなーっていう衝突判定をする
-
-	for ce := circle.Body.GetContactList(); ce != nil; ce = ce.Next {
-		// 箱と箱は簡単に衝突判定が起きる
-		otherData := circle.Body.GetContactList().Other.GetUserData().(objects.ObjectBase)
-		// TODO: 内側に入った判定をするために、線分をつけるべき？
-		if otherData.ID == 2 || otherData.ID == 3 || otherData.ID == 4 {
-			//fmt.Printf("CLEAR!!")
-		}
-	}
 
 	//////////////////////////////////////////////
 	// Simulating the World
@@ -149,7 +146,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	for _, v := range boxes {
 		v.Draw(screen)
 	}
-	circle.Draw(screen)
+
+	for _, v := range joints {
+		fmt.Println("")
+		scale := float64(objects.SCALE)
+		ebitenutil.DrawLine(screen, v.GetAnchorA().X*scale, v.GetAnchorA().Y*scale, v.GetAnchorB().X*scale, v.GetAnchorB().Y*scale, color.Black)
+	}
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
