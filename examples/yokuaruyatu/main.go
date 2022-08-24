@@ -2,13 +2,15 @@ package main
 
 import (
 	"box2d/examples/yokuaruyatu/objects"
+	"fmt"
 	b2d "github.com/E4/box2d"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"image"
 	"image/color"
+	_ "image/png"
 	"log"
-	"math"
 )
 
 /**
@@ -17,44 +19,20 @@ import (
 最終的には、ボールをゴールに運んだらクリアっていうよくあるやつを作りたい。
 */
 
-// ShapeとかあるけどいったんBoxだけ想定でやる
-type Block struct {
-	HalfWidth  float64
-	HalfHeight float64
-	Body       *b2d.B2Body
-}
-
-type Point struct {
-	X float32
-	Y float32
-}
-
-func (b *Block) GetRectPath() (Point, Point, Point, Point) {
-	// TODO: 回転とかに対応していないから足りない。
-	// ほかのドキュメントを読み進めていい感じにできないか模索する
-
-	// 左上
-	lt := Point{X: float32(b.Body.GetPosition().X - b.HalfWidth), Y: float32(b.Body.GetPosition().Y - b.HalfHeight)}
-	// 右上
-	rt := Point{X: float32(b.Body.GetPosition().X + b.HalfWidth), Y: float32(b.Body.GetPosition().Y - b.HalfHeight)}
-	// 右下
-	rb := Point{X: float32(b.Body.GetPosition().X + b.HalfWidth), Y: float32(b.Body.GetPosition().Y + b.HalfHeight)}
-	// 左下
-	lb := Point{X: float32(b.Body.GetPosition().X - b.HalfWidth), Y: float32(b.Body.GetPosition().Y + b.HalfHeight)}
-
-	return lt, rt, rb, lb
-}
-
-var World b2d.B2World
+var World *b2d.B2World
 
 type CustomJoint interface {
 	GetAnchorA() b2d.B2Vec2
 	GetAnchorB() b2d.B2Vec2
 }
 
-var joints []CustomJoint
-var boxes []objects.PolygonObject
-var circle objects.CircleObject
+var (
+	joints          []CustomJoint
+	boxes           []objects.PolygonObject
+	circle          objects.CircleObject
+	emptyImage      = ebiten.NewImage(3, 3)
+	backgroundImage *ebiten.Image
+)
 
 func addBox(box objects.PolygonObject) {
 	boxes = append(boxes, box)
@@ -78,50 +56,29 @@ https://flyover.github.io/box2d.ts/testbed/
 */
 func init() {
 	//////////////////////////////////////////////
+	// ebiten
+	//////////////////////////////////////////////
+	var err error
+	backgroundImage, _, err = ebitenutil.NewImageFromFile("examples/yokuaruyatu/assets/background.png")
+	if err != nil {
+		panic(err)
+	}
+	emptyImage.Fill(color.White)
+
+	//////////////////////////////////////////////
 	// Creating a World
 	//////////////////////////////////////////////
-	// Step.1
 	gravity := b2d.NewB2Vec2(0.0, 2)
-	// step.2
-	World = b2d.MakeB2World(*gravity)
+	w := b2d.MakeB2World(*gravity)
+	World = &w
+	groundBodyProxy = World.CreateBody(b2d.NewB2BodyDef())
 
-	// 床
-	addBox(objects.NewPolygonBox(1.5, 2, 1, 0.1, &World, 0))
-	// 斜めの床
-	addBox(objects.NewPolygonBox(4, 4, 2, 0.1, &World, 0.25*math.Pi))
-
-	offsetX := 0.4
-	// ゴールの床
-	addBox(objects.NewPolygonBox(8-0.4-offsetX, 9-0.4, 0.1, 0.4, &World, 0)) // 左辺
-	addBox(objects.NewPolygonBox(8-offsetX, 9, 0.4, 0.1, &World, 0))         // 床
-	addBox(objects.NewPolygonBox(8+0.4-offsetX, 9-0.4, 0.1, 0.4, &World, 0)) // 右辺
-
-	// エディタ作らないと話になりませんね ww
-
-	// 円
-	circle = objects.NewDynamicCircleObject(1, 1, 0.2, &World)
-
-	// Joint
-	// Jointの勉強をする
-	bodyA := objects.NewDynamicBox(7, 1, 0.1, 0.1, 1.0, &World)
-	bodyA.Body.SetFixedRotation(true) // これで物体の回転自体を制御できる
-	bodyA.Fixture.SetFriction(1)
-
-	bodyB := objects.NewPolygonBox(8, 3, 0.4, 0.1, &World, 0)
-	addBox(bodyA)
-	addBox(bodyB)
-	addBox(objects.NewDynamicBox(7, 1-0.4, 0.2, 0.2, 1.0, &World))
-
-	// Distance Joint
-	jointDef := b2d.MakeB2DistanceJointDef()
-	// アンカーポイントは世界の座標を指定することに注意
-	jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
-	jointDef.CollideConnected = true
-	World.CreateJoint(&jointDef)
-	// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー、種類よって端っこの取り方が違うのかな
-	joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
-
-	emptyImage.Fill(color.White)
+	// 静的な四角をマウスクリックで移動できるようにする
+	kinematic := objects.NewDynamicBox(4, 4, 1, 0.2, 1, World)
+	kinematic.Body.SetType(b2d.B2BodyType.B2_staticBody)
+	kinematic.Body.SetFixedRotation(true)
+	// 画面上に設置しているオブジェクトはすべてstaticにするため衝突しない
+	addBox(kinematic)
 
 }
 
@@ -134,22 +91,20 @@ type Game struct {
 	count int
 }
 
-var (
-	emptyImage = ebiten.NewImage(3, 3)
+const (
+	MouseNone = iota
+	MouseDrag
 )
 
+var MouseStatus = MouseNone
+var selectedBlock *objects.PolygonObject
+var selectedMouseJoint *b2d.B2MouseJointDef
+var mouseB2Vec *b2d.B2Vec2
+var groundBodyProxy *b2d.B2Body
+var mouseJointDef *b2d.B2MouseJointDef
+var mouseJoint *b2d.B2MouseJoint
+
 func (g *Game) Update() error {
-	// 試しにたぶんこうだろうなーっていう衝突判定をする
-
-	for ce := circle.Body.GetContactList(); ce != nil; ce = ce.Next {
-		// 箱と箱は簡単に衝突判定が起きる
-		otherData := circle.Body.GetContactList().Other.GetUserData().(objects.ObjectBase)
-		// TODO: 内側に入った判定をするために、線分をつけるべき？
-		if otherData.ID == 2 || otherData.ID == 3 || otherData.ID == 4 {
-			//fmt.Printf("CLEAR!!")
-		}
-	}
-
 	//////////////////////////////////////////////
 	// Simulating the World
 	//////////////////////////////////////////////
@@ -159,29 +114,81 @@ func (g *Game) Update() error {
 	positionIterations := 3 * 2
 	World.Step(timeStep, velocityIterations, positionIterations)
 
-	// mouse lick
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		x, y := ebiten.CursorPosition()
-		// 新しい箱を作成する
-		box := objects.NewDynamicBox(float64(float32(x)/objects.SCALE), float64(float32(y)/objects.SCALE), 0.1, 0.1, 0.5, &World)
-		box.Fixture.SetRestitution(0.8)
-		addBox(box)
+	x, y := ebiten.CursorPosition()
+	// メートル座標に戻す
+	mx := float64(x) / objects.SCALE
+	my := float64(y) / objects.SCALE
 
+	// ドラッグで移動は意外と面倒だったので、クリック＆クリック方式に変更
+	// マウス関連はマジで苦戦した。正解はWorldに登録したMouseJointを保持して Targetを更新していくでした～
+	// https://github.com/erincatto/box2d/blob/c6cc3646d1701ab3c0750ef397d2d68fc6dbcff2/testbed/test.cpp
+	switch MouseStatus {
+	case MouseNone:
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			// ブロックを検索し、初めて衝突が検出されたものを取得、面倒なので後勝ちにする
+			if MouseStatus == MouseNone {
+
+				for _, v := range boxes {
+					fmt.Printf("point=%f,%f :::: Position=%f,%f \r\n", mx, my, v.Body.GetPosition().X, v.Body.GetPosition().Y)
+					if v.Fixture.TestPoint(b2d.MakeB2Vec2(mx, my)) { // ちょっとよくわからないが Shaeじゃなくて Fixtureの TestPointを使うみたい。 やはり TransFormの意味が分かっていない
+						selectedBlock = &v
+					}
+				}
+				if selectedBlock != nil {
+					selectedBlock.Body.SetType(b2d.B2BodyType.B2_dynamicBody)
+					MouseStatus = MouseDrag
+					md := b2d.MakeB2MouseJointDef()
+					mouseJointDef = &md
+					mouseJointDef.SetBodyA(groundBodyProxy)
+					mouseJointDef.SetBodyB(selectedBlock.Body)
+					mouseJointDef.Target = b2d.MakeB2Vec2(mx, my)
+					mouseJointDef.MaxForce = 1000 * selectedBlock.Body.GetMass()
+					mouseJoint = World.CreateJoint(mouseJointDef).(*b2d.B2MouseJoint)
+				}
+			}
+		}
+	case MouseDrag:
+		if mouseJointDef != nil {
+			mouseJoint.SetTarget(b2d.MakeB2Vec2(mx, my))
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) && mouseJoint != nil && selectedBlock != nil {
+			selectedBlock.Body.SetType(b2d.B2BodyType.B2_staticBody)
+			World.DestroyJoint(mouseJoint)
+			mouseJoint = nil
+			mouseJointDef = nil
+			selectedBlock = nil
+			MouseStatus = MouseNone
+		}
 	}
+
 	return nil
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	screen.Fill(color.White)
+	{
+		op := &ebiten.DrawImageOptions{}
+		screen.DrawImage(backgroundImage.SubImage(image.Rect(0, 0, 979, screenHeight)).(*ebiten.Image), op)
+	}
+
 	for _, v := range boxes {
 		v.Draw(screen)
 	}
-	circle.Draw(screen)
+	if circle.Body != nil {
+		circle.Draw(screen)
+	}
 
 	for _, v := range joints {
-		scale := float64(objects.SCALE)
+		scale := objects.SCALE
 		ebitenutil.DrawLine(screen, v.GetAnchorA().X*scale, v.GetAnchorA().Y*scale, v.GetAnchorB().X*scale, v.GetAnchorB().Y*scale, color.Black)
 	}
+
+	{
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Translate(979, 0)
+		screen.DrawImage(backgroundImage.SubImage(image.Rect(979, 0, screenWidth, screenHeight)).(*ebiten.Image), op)
+	}
+
+	ebitenutil.DebugPrint(screen, fmt.Sprintf("mouseStatus=%d", MouseStatus))
 
 }
 

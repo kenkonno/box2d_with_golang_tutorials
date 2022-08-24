@@ -37,7 +37,8 @@ func RotateVec(v b2d.B2Vec2, radian float64) Vec {
 }
 
 // 1メートル 100px にスケールさせる
-const SCALE float32 = 100
+const SCALE float64 = 100
+const SCALE32 float32 = 100
 
 type ObjectBase struct {
 	ID int

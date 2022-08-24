@@ -74,13 +74,13 @@ func (r *PolygonObject) Draw(screen *ebiten.Image) {
 		vec = append(vec, RotateVec(v, rad))
 	}
 	var path vector.Path
-	centerX := float32(r.Body.GetPosition().X) * SCALE
-	centerY := float32(r.Body.GetPosition().Y) * SCALE
+	centerX := r.Body.GetPosition().X * SCALE
+	centerY := r.Body.GetPosition().Y * SCALE
 	for i, v := range vec {
 		if i == 0 {
-			path.MoveTo(centerX+v.X*SCALE, centerY+v.Y*SCALE)
+			path.MoveTo(float32(centerX)+v.X*SCALE32, float32(centerY)+v.Y*SCALE32)
 		} else {
-			path.LineTo(centerX+v.X*SCALE, centerY+v.Y*SCALE)
+			path.LineTo(float32(centerX)+v.X*SCALE32, float32(centerY)+v.Y*SCALE32)
 		}
 	}
 	// TODO: こっから下はいまいち思い出せていない。 path を三角形にして描画設定をしているように記憶している。

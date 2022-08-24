@@ -56,7 +56,7 @@ func (r *CircleObject) Draw(screen *ebiten.Image) {
 
 	var path vector.Path
 
-	path.Arc(vec.X*SCALE, vec.Y*SCALE, float32(r.Shape.GetRadius())*SCALE, float32(radian), float32(radian)+2*math.Pi, vector.Clockwise)
+	path.Arc(vec.X*SCALE32, vec.Y*SCALE32, float32(r.Shape.GetRadius())*SCALE32, float32(radian), float32(radian)+2*math.Pi, vector.Clockwise)
 	op := &ebiten.DrawTrianglesOptions{
 		FillRule: ebiten.EvenOdd,
 	}
