@@ -2,7 +2,6 @@ package main
 
 import (
 	"box2d/examples/yokuaruyatu/objects"
-	"fmt"
 	b2d "github.com/E4/box2d"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -16,34 +15,6 @@ import (
 よくあるクリックすると箱を出すやつを作ってみることにする。
 最終的には、ボールをゴールに運んだらクリアっていうよくあるやつを作りたい。
 */
-
-// ShapeとかあるけどいったんBoxだけ想定でやる
-type Block struct {
-	HalfWidth  float64
-	HalfHeight float64
-	Body       *b2d.B2Body
-}
-
-type Point struct {
-	X float32
-	Y float32
-}
-
-func (b *Block) GetRectPath() (Point, Point, Point, Point) {
-	// TODO: 回転とかに対応していないから足りない。
-	// ほかのドキュメントを読み進めていい感じにできないか模索する
-
-	// 左上
-	lt := Point{X: float32(b.Body.GetPosition().X - b.HalfWidth), Y: float32(b.Body.GetPosition().Y - b.HalfHeight)}
-	// 右上
-	rt := Point{X: float32(b.Body.GetPosition().X + b.HalfWidth), Y: float32(b.Body.GetPosition().Y - b.HalfHeight)}
-	// 右下
-	rb := Point{X: float32(b.Body.GetPosition().X + b.HalfWidth), Y: float32(b.Body.GetPosition().Y + b.HalfHeight)}
-	// 左下
-	lb := Point{X: float32(b.Body.GetPosition().X - b.HalfWidth), Y: float32(b.Body.GetPosition().Y + b.HalfHeight)}
-
-	return lt, rt, rb, lb
-}
 
 var World b2d.B2World
 
@@ -84,21 +55,101 @@ func init() {
 	// step.2
 	World = b2d.MakeB2World(*gravity)
 
-	// Jointの勉強をする
-	// DynamicBodyのほうは普通に作ればいいっぽい
-	bodyA := objects.NewDynamicBox(4, 1, 0.4, 0.1, 1.0, &World)
-	bodyA.Body.SetAngularDamping(0.1)
-	bodyB := objects.NewPolygonBox(5, 3, 0.4, 0.1, &World, 0)
-	addBox(bodyA)
-	addBox(bodyB)
-	// Distance Joint
-	jointDef := b2d.MakeB2DistanceJointDef()
-	// アンカーポイントは世界の座標を指定することに注意
-	jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
-	jointDef.CollideConnected = true
-	World.CreateJoint(&jointDef)
-	// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー
-	joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
+	{
+		// Jointの勉強をする
+		// DynamicBodyのほうは普通に作ればいいっぽい
+		bodyA := objects.NewDynamicBox(2, 1, 0.4, 0.1, 1.0, &World)
+		//bodyA.Body.SetFixedRotation(false)
+		bodyA.Body.SetFixedRotation(true) // これで物体の回転自体を制御できる
+
+		bodyB := objects.NewPolygonBox(3, 3, 0.4, 0.1, &World, 0)
+		addBox(bodyA)
+		addBox(bodyB)
+
+		// Distance Joint
+		jointDef := b2d.MakeB2DistanceJointDef()
+		// アンカーポイントは世界の座標を指定することに注意
+		jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
+		jointDef.CollideConnected = true
+		World.CreateJoint(&jointDef)
+		// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー、種類よって端っこの取り方が違うのかな
+		joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
+
+		// いろんなJointをしてみる
+		// Prismatic Joint
+		// よくわからないけどトルク？のジョイントらしい。今回のは無関係かも
+		movingBox := objects.NewDynamicBox(2, 1-0.4, 0.2, 0.2, 1.0, &World)
+		addBox(movingBox)
+		prismaticJointDef := b2d.MakeB2PrismaticJointDef()
+		prismaticJointDef.Initialize(bodyA.Body, movingBox.Body, bodyA.Body.GetPosition(), movingBox.Body.GetPosition())
+		joints = append(joints, b2d.MakeB2PrismaticJoint(&prismaticJointDef))
+	}
+
+	{
+		// Jointの勉強をする
+		// DynamicBodyのほうは普通に作ればいいっぽい
+		bodyA := objects.NewDynamicBox(6, 1, 0.4, 0.1, 1.0, &World)
+		//bodyA.Body.SetFixedRotation(false)
+		bodyA.Body.SetFixedRotation(true) // これで物体の回転自体を制御できる
+
+		bodyB := objects.NewPolygonBox(7, 3, 0.4, 0.1, &World, 0)
+		addBox(bodyA)
+		addBox(bodyB)
+
+		// Distance Joint
+		jointDef := b2d.MakeB2DistanceJointDef()
+		// アンカーポイントは世界の座標を指定することに注意
+		jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
+		jointDef.CollideConnected = true
+		World.CreateJoint(&jointDef)
+		// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー、種類よって端っこの取り方が違うのかな
+		joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
+
+		// いろんなJointをしてみる
+		// Distance Joint よくわからないけど固まるw
+		movingBox := objects.NewDynamicBox(6.1, 1-0.4, 0.2, 0.2, 1.0, &World)
+		addBox(movingBox)
+		// Distance Joint
+		distanceJointDef := b2d.MakeB2DistanceJointDef()
+		// アンカーポイントは世界の座標を指定することに注意
+		distanceJointDef.Initialize(bodyA.Body, bodyB.Body, b2d.B2Vec2MulScalar(0.99, bodyA.Body.GetPosition()), movingBox.Body.GetPosition())
+		distanceJointDef.CollideConnected = true
+		World.CreateJoint(&distanceJointDef)
+		joints = append(joints, b2d.MakeB2DistanceJoint(&distanceJointDef))
+	}
+
+	{
+		// DynamicBodyのほうは普通に作ればいいっぽい
+		bodyA := objects.NewDynamicBox(10, 1, 0.4, 0.1, 1.0, &World)
+		//bodyA.Body.SetFixedRotation(false)
+		bodyA.Body.SetFixedRotation(true) // これで物体の回転自体を制御できる
+
+		bodyB := objects.NewPolygonBox(11, 3, 0.4, 0.1, &World, 0)
+		addBox(bodyA)
+		addBox(bodyB)
+
+		// WheelJoint  Joint なんかシランがぶっ壊れる
+		jointDef := b2d.MakeB2DistanceJointDef()
+		// アンカーポイントは世界の座標を指定することに注意
+		jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
+		jointDef.CollideConnected = true
+		World.CreateJoint(&jointDef)
+		// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー、種類よって端っこの取り方が違うのかな
+		joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
+
+		// いろんなJointをしてみる
+		// Distance Joint よくわからないけど固まるw
+		movingBox := objects.NewDynamicBox(10.1, 1-0.4, 0.2, 0.2, 1.0, &World)
+		addBox(movingBox)
+		// Distance Joint
+		wheelJointDef := b2d.MakeB2WheelJointDef()
+		// アンカーポイントは世界の座標を指定することに注意
+		wheelJointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), movingBox.Body.GetPosition())
+		World.CreateJoint(&wheelJointDef)
+		joints = append(joints, b2d.MakeB2WheelJoint(&wheelJointDef))
+	}
+
+	//TODO: なんか上に乗っ型物と同時に動くようにしたい。摩擦を上げればいい？ どうやら物理エンジンの話じゃないっぽい。ほんと～？
 
 	emptyImage.Fill(color.White)
 
@@ -148,7 +199,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	for _, v := range joints {
-		fmt.Println("")
 		scale := float64(objects.SCALE)
 		ebitenutil.DrawLine(screen, v.GetAnchorA().X*scale, v.GetAnchorA().Y*scale, v.GetAnchorB().X*scale, v.GetAnchorB().Y*scale, color.Black)
 	}

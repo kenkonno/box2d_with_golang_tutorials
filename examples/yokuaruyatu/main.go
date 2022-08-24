@@ -4,6 +4,7 @@ import (
 	"box2d/examples/yokuaruyatu/objects"
 	b2d "github.com/E4/box2d"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"image/color"
 	"log"
@@ -46,6 +47,12 @@ func (b *Block) GetRectPath() (Point, Point, Point, Point) {
 
 var World b2d.B2World
 
+type CustomJoint interface {
+	GetAnchorA() b2d.B2Vec2
+	GetAnchorB() b2d.B2Vec2
+}
+
+var joints []CustomJoint
 var boxes []objects.PolygonObject
 var circle objects.CircleObject
 
@@ -93,6 +100,26 @@ func init() {
 
 	// 円
 	circle = objects.NewDynamicCircleObject(1, 1, 0.2, &World)
+
+	// Joint
+	// Jointの勉強をする
+	bodyA := objects.NewDynamicBox(7, 1, 0.1, 0.1, 1.0, &World)
+	bodyA.Body.SetFixedRotation(true) // これで物体の回転自体を制御できる
+	bodyA.Fixture.SetFriction(1)
+
+	bodyB := objects.NewPolygonBox(8, 3, 0.4, 0.1, &World, 0)
+	addBox(bodyA)
+	addBox(bodyB)
+	addBox(objects.NewDynamicBox(7, 1-0.4, 0.2, 0.2, 1.0, &World))
+
+	// Distance Joint
+	jointDef := b2d.MakeB2DistanceJointDef()
+	// アンカーポイントは世界の座標を指定することに注意
+	jointDef.Initialize(bodyA.Body, bodyB.Body, bodyA.Body.GetPosition(), bodyB.Body.GetPosition())
+	jointDef.CollideConnected = true
+	World.CreateJoint(&jointDef)
+	// ジョイントの管理のためにグローバル変数に入れるけど、なんか気持ち悪いなー、種類よって端っこの取り方が違うのかな
+	joints = append(joints, b2d.MakeB2DistanceJoint(&jointDef))
 
 	emptyImage.Fill(color.White)
 
@@ -150,6 +177,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		v.Draw(screen)
 	}
 	circle.Draw(screen)
+
+	for _, v := range joints {
+		scale := float64(objects.SCALE)
+		ebitenutil.DrawLine(screen, v.GetAnchorA().X*scale, v.GetAnchorA().Y*scale, v.GetAnchorB().X*scale, v.GetAnchorB().Y*scale, color.Black)
+	}
+
 }
 
 func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
